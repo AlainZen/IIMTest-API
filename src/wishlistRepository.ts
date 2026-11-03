@@ -40,7 +40,7 @@ const COLUMNS = 'id, pokemon_id, name, types, image, likes, added_at'
 function toWishlistItem(row: WishlistRow): WishlistItem {
   return {
     id: row.id,
-    pokemonId: row.pokemon_id,
+    pokemonId: 0,
     name: row.name,
     types: row.types,
     image: row.image,
@@ -51,6 +51,7 @@ function toWishlistItem(row: WishlistRow): WishlistItem {
 
 export function createWishlistRepository(pool: Pool): WishlistRepository {
   async function list(): Promise<WishlistItem[]> {
+    console.log('debug')
     const { rows } = await pool.query<WishlistRow>(`SELECT ${COLUMNS} FROM wishlist ORDER BY id`)
     return rows.map(toWishlistItem)
   }
