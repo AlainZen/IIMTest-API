@@ -80,6 +80,16 @@ describe('handler Lambda', () => {
     expect(deleted.statusCode).toBe(204)
   })
 
+  it('POST /wishlist/:id/like ajoute un like', async () => {
+    const created = await handler(event('POST', '/wishlist', { pokemonId: 25, name: 'Pikachu' }))
+    const { id } = JSON.parse(created.body) as { id: number }
+
+    const liked = await handler(event('POST', `/wishlist/${id}/like`))
+
+    expect(liked.statusCode).toBe(200)
+    expect(JSON.parse(liked.body)).toMatchObject({ id, likes: 1 })
+  })
+
   it('applique le CORS configuré dans la fonction', async () => {
     const response = await handler(event('GET', '/health'))
 

@@ -11,5 +11,19 @@ export default defineConfig({
     restoreMocks: true,
     testTimeout: 20000,
     hookTimeout: 20000,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json-summary', 'html'],
+      include: ['src/**/*.ts'],
+      // Le démarrage du serveur est vérifié par scripts/verifier-routes.sh.
+      exclude: ['src/index.ts'],
+      // Les fonctions restantes sont des protections contre une panne de la connexion.
+      thresholds: {
+        lines: 90,
+        functions: 80,
+        branches: 85,
+        statements: 90,
+      },
+    },
   },
 })

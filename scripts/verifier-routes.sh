@@ -32,12 +32,15 @@ echo "Pikachu ajouté avec l'id $ID"
 
 curl --fail --silent --show-error "$URL/wishlist" | grep Pikachu
 
+curl --fail --silent --show-error -X POST "$URL/wishlist/$ID/like" | grep '"likes":1'
+echo "Pikachu a reçu un like"
+
 stop_api
 echo "API arrêtée, redémarrage"
 start_api
 
-curl --fail --silent --show-error "$URL/wishlist" | grep Pikachu
-echo "Pikachu est toujours là après le redémarrage"
+curl --fail --silent --show-error "$URL/wishlist" | grep Pikachu | grep '"likes":1'
+echo "Pikachu et son like sont toujours là après le redémarrage"
 
 curl --fail --silent --show-error -X DELETE "$URL/wishlist/$ID"
 curl --fail --silent --show-error "$URL/wishlist" | grep -x '\[\]'

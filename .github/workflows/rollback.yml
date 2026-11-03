@@ -1,0 +1,68 @@
+name: Rollback
+
+# À lancer à la main : onglet Actions, Rollback, Run workflow, sur la branche main.
+# Remet la version stable sur la Lambda. Les migrations déjà appliquées restent en place :
+# elles ne font qu'ajouter des colonnes, donc l'ancienne version continue de fonctionner.
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: Commit à restaurer (vide pour le dernier déploiement stable)
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  # Permet à GitHub de prouver son identité à AWS, sans clé d'accès à stocker.
+  id-token: write
+
+jobs:
+  rollback:
+    name: Restaurer la Lambda
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      API_URL: ${{ vars.API_URL }}
+      LAMBDA_FUNCTION: pokewishlist-api
+    steps:
+      # Les scripts de contrôle restent ceux de main : une ancienne version peut ne pas les avoir.
+      - uses: actions/checkout@v7
+      - name: Identifier le dernier déploiement stable
+        id: target
+        run: bash scripts/find-stable-commit.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_COMMIT: ${{ inputs.commit }}
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.target.outputs.commit }}
+          path: restored
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: restored/package-lock.json
+      - name: Construire le paquet Lambda
+        working-directory: restored
+        run: |
+          npm ci
+          npm run build:lambda
+          cd dist-lambda
+          zip ../lambda.zip index.js
+      - name: Se connecter à AWS
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: eu-west-2
+      - name: Remettre la version sur la Lambda
+        run: |
+          aws lambda update-function-code --function-name "$LAMBDA_FUNCTION" --zip-file fileb://restored/lambda.zip --output text --query LastUpdateStatus
+          aws lambda wait function-updated-v2 --function-name "$LAMBDA_FUNCTION"
+      - name: Contrôler l'API
+        run: bash scripts/smoke-api.sh
+      - name: Noter la version restaurée
+        env:
+          COMMIT: ${{ steps.target.outputs.commit }}
+        run: echo "Version restaurée ${COMMIT}" >> "$GITHUB_STEP_SUMMARY"
