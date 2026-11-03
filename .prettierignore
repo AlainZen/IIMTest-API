@@ -1,4 +1,6 @@
 coverage
 dist
+dist-lambda
+lambda.zip
 node_modules
 package-lock.json

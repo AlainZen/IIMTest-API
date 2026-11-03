@@ -2,6 +2,7 @@ import type { Hono } from 'hono'
 import type { Pool } from 'pg'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp } from '../src/app.js'
+import type { AppEnv } from '../src/i18n.js'
 import { createPool } from '../src/db.js'
 import type { NewWishlistItem, WishlistItem } from '../src/wishlistRepository.js'
 import { createWishlistRepository, MAX_WISHLIST_SIZE } from '../src/wishlistRepository.js'
@@ -9,7 +10,7 @@ import { clearWishlist, createSchema, createTestPool } from './helpers/testDatab
 
 // Ces tests passent par une vraie base PostgreSQL, sans aucun mock SQL.
 let pool: Pool
-let app: Hono
+let app: Hono<AppEnv>
 
 const PIKACHU: NewWishlistItem = {
   pokemonId: 25,
@@ -22,7 +23,7 @@ function pokemon(pokemonId: number): NewWishlistItem {
   return { pokemonId, name: `Pokémon ${pokemonId}`, types: [], image: null }
 }
 
-function post(target: Hono, body: unknown): Promise<Response> {
+function post(target: Hono<AppEnv>, body: unknown): Promise<Response> {
   return Promise.resolve(
     target.request('/wishlist', {
       method: 'POST',
@@ -36,7 +37,7 @@ function remove(id: number | string): Promise<Response> {
   return Promise.resolve(app.request(`/wishlist/${id}`, { method: 'DELETE' }))
 }
 
-async function list(target: Hono = app): Promise<WishlistItem[]> {
+async function list(target: Hono<AppEnv> = app): Promise<WishlistItem[]> {
   const response = await target.request('/wishlist')
   return (await response.json()) as WishlistItem[]
 }
@@ -267,6 +268,28 @@ describe('CORS', () => {
   })
 })
 
+describe('CORS avec plusieurs adresses', () => {
+  it.each(['http://localhost:3000', 'https://pokewishlist.example'])(
+    'autorise %s',
+    async origin => {
+      const multi = createApp(
+        createWishlistRepository(pool),
+        'http://localhost:3000, https://pokewishlist.example',
+      )
+
+      const response = await multi.request('/health', { headers: { Origin: origin } })
+
+      expect(response.headers.get('Access-Control-Allow-Origin')).toBe(origin)
+    },
+  )
+
+  it('n’autorise pas une autre adresse', async () => {
+    const response = await app.request('/health', { headers: { Origin: 'https://pirate.example' } })
+
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull()
+  })
+})
+
 describe('base de données indisponible', () => {
   it('répond 500 avec un message, sans détail technique', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
@@ -280,7 +303,7 @@ describe('base de données indisponible', () => {
       expect(response.status).toBe(500)
       expect(await response.json()).toEqual({
         code: 'server_error',
-        error: "L'API n'a pas pu traiter la demande.",
+        error: 'The API could not process the request.',
       })
     }
   })

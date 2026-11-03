@@ -2,7 +2,7 @@ import { Pool } from 'pg'
 
 const LOCAL_HOSTS = ['localhost', '127.0.0.1', '[::1]']
 
-export function createPool(connectionString: string): Pool {
+export function createPool(connectionString: string, max = 5): Pool {
   const url = new URL(connectionString)
   const isLocal = LOCAL_HOSTS.includes(url.hostname)
 
@@ -11,7 +11,7 @@ export function createPool(connectionString: string): Pool {
 
   const pool = new Pool({
     connectionString: url.toString(),
-    max: 5,
+    max,
     connectionTimeoutMillis: 5000,
     // Supabase chiffre la connexion avec son propre certificat, absent des autorités connues de Node.
     ssl: isLocal ? false : { rejectUnauthorized: false },

@@ -1,4 +1,6 @@
 import { Hono } from 'hono'
+import type { AppEnv } from './i18n.js'
+import { errorBody } from './i18n.js'
 import type { NewWishlistItem, WishlistRepository } from './wishlistRepository.js'
 
 // Le plus grand entier accepté par une colonne INTEGER de PostgreSQL.
@@ -28,32 +30,20 @@ function parseNewItem(value: unknown): NewWishlistItem | null {
   return { pokemonId: body.pokemonId, name, types, image }
 }
 
-export function createWishlistRoutes(repository: WishlistRepository): Hono {
-  const routes = new Hono()
+export function createWishlistRoutes(repository: WishlistRepository): Hono<AppEnv> {
+  const routes = new Hono<AppEnv>()
 
   routes.get('/', async c => c.json(await repository.list()))
 
   routes.post('/', async c => {
     const item = parseNewItem(await c.req.json().catch(() => null))
 
-    if (!item) {
-      return c.json(
-        {
-          code: 'invalid',
-          error: 'Envoie un JSON avec pokemonId (entier positif) et name (texte non vide).',
-        },
-        400,
-      )
-    }
+    if (!item) return c.json(errorBody(c, 'invalid'), 400)
 
     const result = await repository.add(item)
 
-    if (result.status === 'duplicate') {
-      return c.json({ code: 'duplicate', error: 'Ce Pokémon est déjà dans la wishlist.' }, 409)
-    }
-    if (result.status === 'full') {
-      return c.json({ code: 'full', error: 'La wishlist est pleine : 6 Pokémon maximum.' }, 409)
-    }
+    if (result.status === 'duplicate') return c.json(errorBody(c, 'duplicate'), 409)
+    if (result.status === 'full') return c.json(errorBody(c, 'full'), 409)
 
     return c.json(result.item, 201)
   })
@@ -62,9 +52,7 @@ export function createWishlistRoutes(repository: WishlistRepository): Hono {
     const id = Number(c.req.param('id'))
     const removed = isPositiveInteger(id) && (await repository.remove(id))
 
-    if (!removed) {
-      return c.json({ code: 'not_found', error: 'Aucune entrée de la wishlist avec cet id.' }, 404)
-    }
+    if (!removed) return c.json(errorBody(c, 'not_found'), 404)
 
     return c.body(null, 204)
   })

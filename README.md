@@ -26,17 +26,30 @@ L'API tourne sur `http://localhost:3001`.
 
 `POST /wishlist` attend un JSON comme `{"pokemonId":25,"name":"Pikachu","types":["electric"],"image":null}`. La wishlist accepte 6 Pokémon au maximum.
 
+Les messages d'erreur suivent l'en-tête `Accept-Language` : anglais par défaut, français, espagnol ou allemand. Les traductions sont dans `src/locales`.
+
 ## Vérifier le code
 
 ```bash
 npm run lint
 npm run format:check
+npm run check:locales
 npm run typecheck
 npm test
 npm run build
 ```
 
 `npm test` passe par une vraie base PostgreSQL, sans mock SQL. **Il vide la base de `TEST_DATABASE_URL`** et refuse de tourner si elle est identique à `DATABASE_URL`.
+
+## Déployer sur AWS Lambda
+
+`src/lambda.ts` adapte l'API à Lambda. Pour construire le paquet :
+
+```bash
+npm run build:lambda
+```
+
+Le fichier `dist-lambda/index.js` contient tout le code. Zippe-le seul, envoie-le dans une fonction Lambda Node.js 22 avec le gestionnaire `index.handler`, puis place une HTTP API d'API Gateway devant. La fonction a besoin de deux variables : `DATABASE_URL` et `CORS_ORIGIN`. Le CORS est géré par Hono : ne l'active pas aussi dans API Gateway.
 
 ## Intégration continue
 

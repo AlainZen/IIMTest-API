@@ -1,0 +1,9 @@
+{
+  "errors": {
+    "invalid": "Envía un JSON con pokemonId (entero positivo) y name (texto no vacío).",
+    "duplicate": "Este Pokémon ya está en la lista de deseos.",
+    "full": "La lista de deseos está llena: 6 Pokémon como máximo.",
+    "not_found": "No hay ninguna entrada de la lista de deseos con este id.",
+    "server_error": "La API no ha podido procesar la solicitud."
+  }
+}
