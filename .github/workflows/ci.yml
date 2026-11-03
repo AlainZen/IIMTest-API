@@ -1,0 +1,177 @@
+name: CI
+
+# Se lance à chaque push, sur toutes les branches. Le résultat apparaît aussi sur la PR de la branche.
+on:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  prettier:
+    name: Prettier
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+
+  test:
+    name: Vitest sur PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: wishlist_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/wishlist_test
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  build:
+    name: Build, routes et redémarrage
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: wishlist_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/wishlist_test
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Créer la table
+        run: psql "$DATABASE_URL" -f db/init.sql
+      - name: Appeler les routes et redémarrer l'API
+        run: bash scripts/verifier-routes.sh
+
+  e2e:
+    name: Tests e2e (Nuxt, Hono et PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: wishlist_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/wishlist_test
+    steps:
+      # Les deux projets sont rangés côte à côte, comme sur ton ordinateur.
+      - uses: actions/checkout@v7
+        with:
+          path: IIMTest-API
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository_owner }}/IIMTest-Inte
+          path: Inte
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            Inte/package-lock.json
+            IIMTest-API/package-lock.json
+      - run: npm ci
+        working-directory: IIMTest-API
+      - run: npm ci
+        working-directory: Inte
+      - name: Créer la table
+        run: psql "$TEST_DATABASE_URL" -f IIMTest-API/db/init.sql
+      - name: Installer le navigateur de test
+        run: npx playwright install --with-deps chromium
+        working-directory: Inte
+      - run: npm run test:e2e
+        working-directory: Inte
+      - name: Garder les traces des tests ratés
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: traces-e2e
+          path: Inte/test-results
+          retention-days: 7
+
+  audit:
+    name: Audit de sécurité
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm audit --omit=dev --audit-level=high
