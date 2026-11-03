@@ -11,6 +11,7 @@ export interface NewWishlistItem {
 
 export interface WishlistItem extends NewWishlistItem {
   id: number
+  likes: number
   addedAt: string
 }
 
@@ -21,6 +22,7 @@ export interface WishlistRepository {
   list: () => Promise<WishlistItem[]>
   add: (item: NewWishlistItem) => Promise<AddResult>
   remove: (id: number) => Promise<boolean>
+  like: (id: number) => Promise<WishlistItem | null>
 }
 
 interface WishlistRow {
@@ -29,10 +31,11 @@ interface WishlistRow {
   name: string
   types: string[]
   image: string | null
+  likes: number
   added_at: Date
 }
 
-const COLUMNS = 'id, pokemon_id, name, types, image, added_at'
+const COLUMNS = 'id, pokemon_id, name, types, image, likes, added_at'
 
 function toWishlistItem(row: WishlistRow): WishlistItem {
   return {
@@ -41,6 +44,7 @@ function toWishlistItem(row: WishlistRow): WishlistItem {
     name: row.name,
     types: row.types,
     image: row.image,
+    likes: row.likes,
     addedAt: row.added_at.toISOString(),
   }
 }
@@ -97,5 +101,14 @@ export function createWishlistRepository(pool: Pool): WishlistRepository {
     return Boolean(rowCount)
   }
 
-  return { list, add, remove }
+  async function like(id: number): Promise<WishlistItem | null> {
+    // PostgreSQL fait le calcul : deux likes simultanés sont bien comptés tous les deux.
+    const { rows } = await pool.query<WishlistRow>(
+      `UPDATE wishlist SET likes = likes + 1 WHERE id = $1 RETURNING ${COLUMNS}`,
+      [id],
+    )
+    return rows[0] ? toWishlistItem(rows[0]) : null
+  }
+
+  return { list, add, remove, like }
 }

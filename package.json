@@ -15,8 +15,10 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "build:lambda": "esbuild src/lambda.ts --bundle --platform=node --target=node22 --format=cjs --external:pg-native --outfile=dist-lambda/index.js",
-    "check:locales": "node scripts/check-locales.mjs src/locales"
+    "check:locales": "node scripts/check-locales.mjs src/locales",
+    "migrate": "tsx --env-file-if-exists=.env scripts/migrate.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.6",
@@ -27,6 +29,7 @@
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.20.5",
     "@types/pg": "^8.23.1",
+    "@vitest/coverage-v8": "^5.1.0",
     "esbuild": "^0.28.2",
     "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",

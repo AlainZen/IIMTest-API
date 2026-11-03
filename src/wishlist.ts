@@ -57,5 +57,14 @@ export function createWishlistRoutes(repository: WishlistRepository): Hono<AppEn
     return c.body(null, 204)
   })
 
+  routes.post('/:id{[0-9]+}/like', async c => {
+    const id = Number(c.req.param('id'))
+    const item = isPositiveInteger(id) ? await repository.like(id) : null
+
+    if (!item) return c.json(errorBody(c, 'not_found'), 404)
+
+    return c.json(item)
+  })
+
   return routes
 }

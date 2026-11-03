@@ -80,6 +80,7 @@ describe('POST /wishlist', () => {
     expect(await response.json()).toEqual({
       id: 1,
       ...PIKACHU,
+      likes: 0,
       addedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
     })
   })
@@ -240,6 +241,75 @@ describe('DELETE /wishlist/:id', () => {
     await remove(1)
 
     expect(await (await post(app, PIKACHU)).json()).toMatchObject({ id: 2 })
+  })
+})
+
+describe('POST /wishlist/:id/like', () => {
+  function like(id: number | string): Promise<Response> {
+    return Promise.resolve(app.request(`/wishlist/${id}/like`, { method: 'POST' }))
+  }
+
+  async function addPikachu(): Promise<WishlistItem> {
+    const response = await post(app, PIKACHU)
+    return (await response.json()) as WishlistItem
+  }
+
+  it('une nouvelle entrée commence à 0 like', async () => {
+    await expect(addPikachu()).resolves.toMatchObject({ likes: 0 })
+  })
+
+  it('répond 200 et ajoute un like à chaque appel', async () => {
+    const { id } = await addPikachu()
+
+    const first = await like(id)
+    expect(first.status).toBe(200)
+    await expect(first.json()).resolves.toMatchObject({ id, pokemonId: 25, likes: 1 })
+
+    const second = await like(id)
+    await expect(second.json()).resolves.toMatchObject({ likes: 2 })
+  })
+
+  it('écrit le like dans la table, sans toucher aux autres entrées', async () => {
+    const { id } = await addPikachu()
+    await post(app, pokemon(4))
+
+    await like(id)
+
+    const { rows } = await pool.query('SELECT pokemon_id, likes FROM wishlist ORDER BY id')
+    expect(rows).toEqual([
+      { pokemon_id: 25, likes: 1 },
+      { pokemon_id: 4, likes: 0 },
+    ])
+  })
+
+  it('compte tous les likes qui arrivent en même temps', async () => {
+    const { id } = await addPikachu()
+
+    await Promise.all(Array.from({ length: 5 }, () => like(id)))
+
+    await expect(list()).resolves.toMatchObject([{ likes: 5 }])
+  })
+
+  it('répond 404 si l’entrée n’existe pas', async () => {
+    const response = await like(999)
+
+    expect(response.status).toBe(404)
+    await expect(response.json()).resolves.toMatchObject({ code: 'not_found' })
+  })
+
+  it.each(['abc', '0', '99999999999'])('répond 404 pour l’id %s', async id => {
+    const response = await like(id)
+
+    expect(response.status).toBe(404)
+  })
+
+  it('les likes survivent à une nouvelle instance de l’API', async () => {
+    const { id } = await addPikachu()
+    await like(id)
+
+    const restarted = createApp(createWishlistRepository(pool))
+
+    await expect(list(restarted)).resolves.toMatchObject([{ likes: 1 }])
   })
 })
 
